@@ -7,6 +7,9 @@ This repository contains the official implementation for our research paper, cur
 The complete source code, dataset, and pre-trained models will be made publicly available soon.
 
 - [ ] ML Training Code
-- [ ] Dataset Generation code
+- [ ] Pre-Trained Model
+- [ ] Dataset Generation Code
 - [ ] Measurment Script
-- [ ] Pre-Trained model
+- [ ] Nx-Open Wrapper
+      
+
