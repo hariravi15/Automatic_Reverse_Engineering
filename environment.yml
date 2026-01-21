@@ -1,4 +1,4 @@
-name: Reverse_engineeering
+name: Reverse_engineering
 channels:
   - conda-forge
   - defaults
