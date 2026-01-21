@@ -183,7 +183,7 @@ class MVCNN_Encoder(nn.Module):
         cnn_base = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
         self.view_feature_extractor = nn.Sequential(*list(cnn_base.children())[:-2])
         self.pool = nn.AdaptiveAvgPool2d((1, 1))
-        # The raw feature dimension from ResNet34 before the FC layer is 512
+        # the raw feature dimension from ResNet34 before the FC layer is 512
         self.feature_dim = cnn_base.fc.in_features
 
     def forward(self, multi_view_images: torch.Tensor) -> torch.Tensor:
@@ -212,11 +212,7 @@ class CADTransformerDecoder(nn.Module):
         super().__init__()
         self.embed_dim = embed_dim
         self.embedding = nn.Embedding(vocab_size, embed_dim)
-
-        # ---------- NEW ----------
-        self.token_type_embed = nn.Embedding(3, embed_dim)  # 0=global 1=in_sketch 2=in_extrude
-        # -------------------------
-
+        self.token_type_embed = nn.Embedding(3, embed_dim)  
         self.pos_encoder = PositionalEncoding(embed_dim, dropout, config.MAX_SEQ_LENGTH)
         decoder_layer = nn.TransformerDecoderLayer(d_model=embed_dim, nhead=num_heads,
                                                    dim_feedforward=ff_dim, dropout=dropout,
@@ -340,7 +336,7 @@ class MultiViewImageToCADModel(nn.Module):
             return final_tokens
 
 
-# Helper_Functions ---
+# Helper_Functions 
 def visualize_attention(tokens, attention_weights, view_names):
     if not attention_weights:
         print("No attention weights to visualize.")
@@ -435,7 +431,7 @@ def evaluate_model(model, loader, criterion):
 
 
 def train_model(args):
-    print("\n--- Starting Training Mode ---")
+    print("\n-Starting Training Mode")
     split_data = json.load(open(config.DATASET_SPLIT_JSON_PATH))
     train_ids, val_ids = split_data.get('train_ids', []), split_data.get('val_ids', [])
     print("Building vocabulary from training data...")
@@ -522,7 +518,7 @@ def train_model(args):
 
 
 def test_model(args):
-    print("\n--- Starting Test/Inference Mode ---")
+    print("\n Starting Test/Inference Mode ")
     if not args.test_dir or not os.path.isdir(args.test_dir):
         raise ValueError(f"Test directory not found. Use --test_dir. Path: {args.test_dir}")
     if not os.path.exists(config.VOCAB_SAVE_PATH):
@@ -559,7 +555,7 @@ def test_model(args):
     if input_tensor is not None:
         generated_tokens = model.generate_sequence_beam_search(input_tensor, vocab, beam_width=5)
         structured_json = tokens_to_json_script(generated_tokens)
-        print("\n--- Generated JSON Script ---\n", json.dumps(structured_json, indent=2))
+        print("\n Generated JSON Script \n", json.dumps(structured_json, indent=2))
         output_filename = f"generated_output_for_{os.path.basename(args.test_dir)}.json"
         with open(output_filename, "w") as f: json.dump(structured_json, f, indent=2)
         print(f"\nSaved output to: {output_filename}")
