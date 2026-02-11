@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="description"
+        content="CAD-Coder">
+  <meta name="keywords" content="CAD-Coder, CAD, VLM">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CAD-Coder</title>
+
+  <style>
+      .arrow {
+        display: inline-block;
+        font-size: 40px; /* Adjust size as needed */
+        color: #555; /* Arrow color */
+        margin: 0 15px; /* Spacing around the arrow */
+      }
+
+      .arrow::before {
+        content: "\27A4"; /* Unicode character for a rightwards arrow with a triangle arrowhead */
+      }
+
+      .columns {
+      display: flex;
+      gap: 5px; /* Small gap between columns */
+      justify-content: center;
+      align-items: center;
+    }
+
+    .stl-viewer {
+      width: 100%;
+      max-width: 300px; /* Limit maximum width */
+      height: auto; /* Maintain aspect ratio */
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      margin: 0 auto; /* Center the element */
+    }
+
+    model-viewer {
+      width: 100%; /* Make the 3D model viewer responsive */
+      height: auto; /* Maintain aspect ratio */
+    }
+
+  </style>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+
+    function gtag() {
+      dataLayer.push(arguments);
+    }
+
+    gtag('js', new Date());
+
+    gtag('config', 'G-PYVRSFMDRL');
+  </script>
+
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro"
+        rel="stylesheet">
+
+  <link rel="stylesheet" href="./static/css/bulma.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-carousel.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-slider.min.css">
+  <link rel="stylesheet" href="./static/css/fontawesome.all.min.css">
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="./static/css/index.css">
+  <link rel="icon" href="./static/images/icon.png">
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script defer src="./static/js/fontawesome.all.min.js"></script>
+  <script src="./static/js/bulma-carousel.min.js"></script>
+  <script src="./static/js/bulma-slider.min.js"></script>
+  <script src="./static/js/index.js"></script>
+</head>
+<body>
+
+<nav class="navbar" role="navigation" aria-label="main navigation">
+  <div class="navbar-brand">
+    <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false">
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+    </a>
+  </div>
+  <div class="navbar-menu">
+    <div class="navbar-start" style="flex-grow: 1; justify-content: center;">
+      <a class="navbar-item" href="https://ferdous-alam.github.io/">
+      <span class="icon">
+          <i class="fas fa-home"></i>
+      </span>
+      </a>
+      </div>
+    </div>
+
+  </div>
+</nav>
+
+
+<section class="hero">
+  <div class="hero-body">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <h1 class="title is-1 publication-title">CAD-Coder: An Open-Source Vision-Language Model for Computer-Aided Design Code Generation
+            </h1>
+          <div class="is-size-5 publication-authors">
+            <span class="author-block">
+              <a href="https://anniedoris.github.io/">Anna C. Doris</a><sup>1</sup>,</span>
+              <span class="author-block">
+            <a href="https://decode.mit.edu/">Md Ferdous Alam</a><sup>1</sup></span>
+            <span class="author-block">
+            <a href="https://decode.mit.edu/">Amin Heyrani Nobari</a><sup>1</sup></span>
+            <span class="author-block">
+              <a href="https://decode.mit.edu/">Faez Ahmed</a><sup>1</sup></span>
+          </div>
+
+          <div class="is-size-5 publication-authors">
+            <span class="author-block"><sup>1</sup>Massachusetts Institute of Technology</span>
+          </div>
+
+          <div class="column has-text-centered">
+            <div class="publication-links">
+              <!-- PDF Link. -->
+              <!-- <span class="link-block">
+                <a href=""
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fas fa-file-pdf"></i>
+                  </span>
+                  <span>Paper</span>
+                </a>
+              </span> -->
+              <span class="link-block">
+                <a href="https://arxiv.org/pdf/2505.14646"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="ai ai-arxiv"></i>
+                  </span>
+                  <span>arXiv</span>
+                </a>
+              </span>
+              <!-- Code Link. -->
+              <span class="link-block">
+                <a href="https://github.com/anniedoris/CAD-Coder"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fab fa-github"></i>
+                  </span>
+                  <span>Code</span>
+                  </a>
+              </span>
+              <!-- Dataset Link. -->
+              <span class="link-block">
+                <a href="https://huggingface.co/datasets/CADCODER/GenCAD-Code"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="far fa-images"></i>
+                  </span>
+                  <span>Data</span>
+                  </a>
+              </span>
+              <!-- Model Link. -->
+              <span class="link-block">
+                <a href="https://huggingface.co/CADCODER/CAD-Coder"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fas fa-robot"></i>
+                  </span>
+                  <span>Model</span>
+                  </a>
+              </span>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<section class="hero teaser">
+  <div class="container is-max-desktop">
+    <div class="hero-body" style="text-align: center; display: flex; align-items: center; justify-content: center;">
+
+      <!-- Image Teaser -->
+      <!-- <div class="teaser-image" style="display: inline-block;">
+        <img src="./static/images/403.png" alt="Teaser Image" style="width: 150px; height: auto; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);">
+      </div> -->
+
+      <!-- Unicode Arrow to GenCAD Box -->
+      <!-- <div class="arrow-container" style="display: flex; align-items: center; margin: 0 5px;">
+        <span class="arrow"></span>
+      </div> -->
+
+      <!-- GenCAD Box -->
+      <!-- <div class="gencad-box" style="display: inline-flex; align-items: center; justify-content: center; border-radius: 20px; background-color: rgb(187, 181, 181); width: 300px; height: 100px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); margin: 0 5px;">
+        <h3 style="color: black; font-size: 36px; font-weight: bold; margin: 0;">GenCAD</h3>
+      </div> -->
+
+      <!-- Unicode Arrow to GenCAD Box -->
+      <!-- <div class="arrow-container" style="display: flex; align-items: center; margin: 0 5px;">
+        <span class="arrow"></span>
+      </div> -->
+
+      <!-- STL Viewer -->
+      <!-- <div class="stl-viewer" style="display: inline-block; width: 300px; height: 300px; border: 1px solid #ddd; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);">
+        <model-viewer src="./static/mesh/403.glb" alt="3D Model" auto-rotate camera-controls ar shadow-intensity="1" style="width: 100%; height: 100%;">
+        </model-viewer>
+      </div> -->
+
+      <div class="publication-video">
+          <iframe src="static/videos/teaser.mp4"
+                  frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+      </div>
+
+    </div>
+    <h2 class="subtitle has-text-centered" style="margin-top: 20px;">
+      CAD-Coder generates CAD code (CadQuery Python) given an image input! Our model is a fine-tuned, open-source vision-langauge foundation model.
+    </h2>
+  </div>
+</section>
+
+<!-- Add this script to include the model-viewer library -->
+<script type="module" src="https://unpkg.com/@google/model-viewer@v1.9.2/dist/model-viewer.min.js"></script>
+
+
+<section class="section">
+  <div class="container is-max-desktop">
+    <!-- Abstract. -->
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Abstract</h2>
+        <div class="content has-text-justified">
+          <p>
+            Efficient creation of accurate and editable 3D CAD models
+            is critical in engineering design, significantly impacting cost and
+            time-to-market in product innovation. Current manual workflows
+            remain highly time-consuming and demand extensive user expertise. While recent developments in AI-driven CAD generation
+            show promise, existing models are limited by incomplete representations of CAD operations, inability to generalize to real-world
+            images, and low output accuracy. This paper introduces CADCoder, an open-source Vision-Language Model (VLM) explicitly
+            fine-tuned to generate editable CAD code (CadQuery Python)
+            directly from visual input. Leveraging a novel dataset that we
+            created—GenCAD-Code, consisting of over 163k CAD-model
+            image and code pairs—CAD-Coder outperforms state-of-the-art
+            VLM baselines such as GPT-4.5 and Qwen2.5-VL-72B, achieving
+            a 100% valid syntax rate and the highest accuracy in 3D solid
+            similarity. Notably, our VLM demonstrates some signs of generalizability, successfully generating CAD code from real-world
+            images and executing CAD operations unseen during fine-tuning.
+            The performance and adaptability of CAD-Coder highlights the
+            potential of VLMs fine-tuned on code to streamline CAD workflows for engineers and designers. 
+          </p>
+        </div>
+      </div>
+    </div>
+    <!--/ Abstract. -->
+  </div>
+</section>
+
+
+<section class="section">
+  <div class="container is-max-desktop">
+
+  
+    <!-- Results. -->
+    <div class="columns is-centered">
+      <div class="column is-full-width">
+
+        <h2 class="title is-3">Image-Conditioned CAD Reconstruction</h2>
+
+        <div class="content has-text-justified">
+          <p>
+            CAD-Coder demonstrates the best performance on the task of generating CADQuery Python code given a CAD image input when compared with state-of-the-art closed and open source VLMs.
+          </p>
+        </div>
+
+        <div class="columns is-vcentered is-mobile is-gapless"> <!-- Added is-gapless class -->
+          <img src="static/images/website_results.png" alt="Teaser Image" />
+        </div>
+      </div>      
+    </div>
+
+    <!-- Generalization. -->
+    <div class="columns is-centered">
+      <div class="column is-full-width">
+
+        <h2 class="title is-3">Generalization Experiments</h2>
+
+        <div class="content has-text-justified">
+          <p>
+            CAD-Coder demonstrates the best performance on the task of generating CADQuery Python code given a CAD image input when compared with state-of-the-art closed and open source VLMs.
+          </p>
+        </div>
+
+        <div class="columns is-vcentered is-mobile is-gapless"> <!-- Added is-gapless class -->
+          <img src="static/images/website_results.png" alt="Teaser Image" />
+        </div>
+      </div>      
+    </div>
+
+
+  </div>
+</section>
+
+
+<section class="section" id="BibTeX">
+  <div class="container is-max-desktop content">
+    <h2 class="title">BibTeX</h2>
+    <pre><code>@misc{alam2025gencadimageconditionedcomputeraideddesign,
+      title={CAD-Coder: An Open-Source Vision-Language Model for Computer-Aided Design Code Generation}, 
+      author={Md Ferdous Alam and Faez Ahmed},
+      year={2025},
+      eprint={2409.16294},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2409.16294}, 
+}</code></pre>
+  </div>
+</section>
+
+
+<footer class="footer">
+  <div class="container">
+    <div class="content has-text-centered">
+      <a class="icon-link" href="https://github.com/ferdous-alam" class="external-link" disabled>
+        <i class="fab fa-github"></i>
+      </a>
+    </div>
+    <div class="columns is-centered">
+      <div class="column is-8">
+        <div class="content">
+          <p>
+            template for this website is borrowed from <a
+              href="https://github.com/nerfies/nerfies.github.io">here</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
