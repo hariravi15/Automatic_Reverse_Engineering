@@ -1,0 +1,651 @@
+# automatic_measurement.py
+import cv2
+import numpy as np
+import json
+import os
+from datetime import datetime
+import argparse
+import sys
+INPUT_FOLDER = r'D:\Automtion\test8'
+OUTPUT_FOLDER = r'D:\Automtion'
+
+#INPUT_FOLDER = r'D:\pic\mes2'
+#OUTPUT_FOLDER = r'D:\pic'
+
+PPM_TOP = 3.5250
+PPM_SIDE = 16.9000
+
+if not os.path.exists(OUTPUT_FOLDER):
+    os.makedirs(OUTPUT_FOLDER)
+
+
+def get_top_view_contours(image_path, debug=False):
+    import cv2, numpy as np, os
+
+    image = cv2.imread(image_path)
+    if image is None:
+        print(f"  -> Error: Could not read image {image_path}")
+        return None, None, None
+
+    # Convert to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # --- Shadow / illumination correction ---
+    gray_float = gray.astype(np.float32)
+    blur_background = cv2.GaussianBlur(gray_float, (55, 55), 0)
+    normalized = cv2.divide(gray_float, blur_background, scale=255)
+    normalized = np.clip(normalized, 0, 255).astype(np.uint8)
+
+    # Enhance local contrast
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    normalized = clahe.apply(normalized)
+
+    # --- CHANGE 1: Calibrated Gaussian Blur ---
+    # Changed from (7, 7) to (7, 7) based on your 'MY_BL' value
+    blurred = cv2.GaussianBlur(normalized, (7, 7), 0)
+
+    # --- CHANGE 2: Calibrated Paper Boundary Detection ---
+    # Changed Canny from (0, 184) to (7, 185)
+    paper_edges = cv2.Canny(blurred, 7, 185)
+    paper_contours, _ = cv2.findContours(paper_edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    if not paper_contours:
+        print(f"  -> Error: Could not find paper background in {os.path.basename(image_path)}")
+        return image, None, None
+
+    paper_contour = max(paper_contours, key=cv2.contourArea)
+
+    # Create mask for object region
+    mask = np.zeros_like(gray)
+    cv2.drawContours(mask, [paper_contour], -1, 255, -1)
+    kernel = np.ones((3, 3), np.uint8)
+
+    # --- CHANGE 3: Calibrated Adaptive Thresholding ---
+    # Block size remains 33; Constant C changed from 2 to 0
+    adaptive_thresh = cv2.adaptiveThreshold(
+        blurred, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
+        cv2.THRESH_BINARY_INV, 33, 0)
+
+    _, otsu_thresh_unclean = cv2.threshold(
+        blurred, 0, 255,
+        cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+    # Combine and Apply mask
+    combined_thresh = cv2.bitwise_or(adaptive_thresh, otsu_thresh_unclean)
+    object_thresh_uncleaned = cv2.bitwise_and(combined_thresh, combined_thresh, mask=mask)
+
+    # Clean noise
+    object_thresh = cv2.morphologyEx(object_thresh_uncleaned, cv2.MORPH_CLOSE, kernel, iterations=2)
+    object_thresh = cv2.morphologyEx(object_thresh, cv2.MORPH_OPEN, kernel, iterations=1)
+
+    # --- CHANGE 4: Calibrated Contour Enhancement ---
+    # Changed Canny from (0, 184) to (7, 185)
+    edges = cv2.Canny(object_thresh, 7, 185)
+    object_thresh = cv2.bitwise_or(object_thresh, edges)
+
+    contours, hierarchy = cv2.findContours(object_thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    # (Debug visualization code remains the same...)
+    if debug:
+        print(f'  -> Total contours found: {len(contours)}')
+        if len(contours) > 0:
+            debug_img = image.copy()
+            cv2.drawContours(debug_img, contours, -1, (0, 255, 0), 1)
+            cv2.imshow("Top View Debug Contours", debug_img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+    if not contours or hierarchy is None:
+        print(f"  -> Could not find any contours or hierarchy in the top view.")
+        return image, None, None
+
+    return image, contours, hierarchy
+
+
+
+def measure_height_from_side_view(side_image_path, ppm):
+    image = cv2.imread(side_image_path)
+    if image is None: return 0.0
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours: return 0.0
+    main_contour = max(contours, key=cv2.contourArea)
+    _, _, _, h_px = cv2.boundingRect(main_contour)
+    return h_px / ppm
+
+
+def measure_cylinder(main_contour, children, ppm):
+    measurements = {}
+
+    # 1. Get the Center of the main disk (Green OD)
+    (x_main, y_main), od_radius_px = cv2.minEnclosingCircle(main_contour)
+    measurements['outer_diameter_mm'] = (od_radius_px * 2) / ppm
+
+    # We start assuming the Disk Center is the (0,0) Origin
+    origin = np.array([x_main, y_main])
+
+    measurements['bolt_holes'] = []
+    measurements['inner_diameter_mm'] = 0.0
+
+    if children:
+        # 2. Find the Center Hole (ID)
+        # It is the hole closest to the physical center of the disk
+        closest_index = -1
+        min_distance = float('inf')
+
+        child_data = []
+        for i, child in enumerate(children):
+            (cx, cy), radius = cv2.minEnclosingCircle(child)
+            dist = np.linalg.norm(origin - np.array([cx, cy]))
+            child_data.append({'center': (cx, cy), 'radius': radius, 'index': i})
+
+            if dist < min_distance:
+                min_distance = dist
+                closest_index = i
+
+        # 3. Validate Center Hole
+        # If the closest hole is very close to the center (within 15% of OD), treat it as ID.
+        center_hole_found = False
+        if closest_index != -1 and min_distance < (od_radius_px * 0.15):
+            center_hole_found = True
+            id_data = child_data[closest_index]
+            measurements['inner_diameter_mm'] = (id_data['radius'] * 2) / ppm
+            # Refine the Origin: Use the Center Hole's center as the precise (0,0)
+            origin = np.array(id_data['center'])
+
+        # 4. Calculate Bolt Hole Coordinates
+        for i, data in enumerate(child_data):
+            # Skip the center hole if we found one
+            if center_hole_found and i == closest_index:
+                continue
+
+            # COORDINATE TRANSFORMATION
+            # Image X is Left->Right. CAD X is Left->Right.
+            # Image Y is Top->Down.   CAD Y is Bottom->Up.
+
+            # x_cad = (x_img - x_origin)
+            rel_x = (data['center'][0] - origin[0]) / ppm
+
+            # y_cad = (y_origin - y_img)  <-- FLIPS Y-AXIS FOR CAD
+            rel_y = (origin[1] - data['center'][1]) / ppm
+
+            measurements['bolt_holes'].append({
+                'diameter_mm': (data['radius'] * 2) / ppm,
+                'position_xy_mm': [rel_x, rel_y]
+            })
+
+    return measurements
+
+def measure_cuboid(main_contour, ppm):
+    rect = cv2.minAreaRect(main_contour)
+    (w_px, h_px) = rect[1]
+    return {'length_mm': max(w_px, h_px) / ppm, 'width_mm': min(w_px, h_px) / ppm}
+
+
+def measure_l_clamp(main_contour, ppm):
+    # 1. Use minAreaRect to handle rotation (returns center, (w, h), angle)
+    rect = cv2.minAreaRect(main_contour)
+    (w_px, h_px) = rect[1]
+
+    # Ensure Length is the longer side (X-axis logic)
+    dim1 = w_px / ppm
+    dim2 = h_px / ppm
+    length_mm = max(dim1, dim2)
+    width_mm = min(dim1, dim2)
+
+    # 2. Calculate Thickness
+    # Area of L-shape = (Length * Thickness) + (Width - Thickness) * Thickness
+    # This is a quadratic equation, but we can approximate it simpler:
+    # Area ≈ (Length + Width) * Thickness - (Thickness^2)
+    # Thickness ≈ Area / (Length + Width) (Rough approximation for thin parts)
+
+    area_px = cv2.contourArea(main_contour)
+    area_mm = area_px / (ppm * ppm)
+
+    # Refined Thickness Calculation:
+    # We solve T^2 - (L+W)*T + Area = 0 for T
+    # Quadratic formula: T = [ (L+W) - sqrt((L+W)^2 - 4*Area) ] / 2
+    b = -(length_mm + width_mm)
+    c = area_mm
+
+    delta = (b ** 2) - (4 * 1 * c)
+    if delta >= 0:
+        thickness_mm = (-b - np.sqrt(delta)) / 2
+    else:
+        # Fallback if area calculation is noisy
+        thickness_mm = area_mm / (length_mm + width_mm)
+
+    return {
+        'overall_length_mm': length_mm,
+        'overall_width_mm': width_mm,  # This effectively becomes the "height" of the L on the 2D plane
+        'estimated_thickness_mm': thickness_mm
+    }
+
+def classify_shape(contours):
+    if not contours: return "unknown"
+    main_contour = max(contours, key=cv2.contourArea)
+    perimeter = cv2.arcLength(main_contour, True)
+    if perimeter == 0: return "unknown"
+    area = cv2.contourArea(main_contour)
+    circularity = (4 * np.pi * area) / (perimeter ** 2)
+    if circularity > 0.8:
+        return "cylinder"
+
+    corners = cv2.approxPolyDP(main_contour, 0.02 * perimeter, True)
+    if len(corners) == 4:
+        return "cuboid"
+    elif 5 <= len(corners) <= 8:  # L-clamps often have 6 or 8 corners
+        return "l_clamp"
+    if 0.6 < circularity <= 0.8:
+        return "cylinder"
+    return "unknown"
+
+
+def generate_cad_json(shape_type, measurements, source_filename):
+    operations = []
+
+    if shape_type == "cylinder":
+        od = measurements.get('outer_diameter_mm', 0)
+        id_val = measurements.get('inner_diameter_mm', 0)
+        height = measurements.get('height_mm', 0)
+
+        # 1. Base Sketch (Main Body + Center ID)
+        curves = [{"type": "Circle", "center_xy": [0, 0], "radius": od / 2}]
+
+        # If ID exists, add it to the base sketch to make it hollow immediately
+        if id_val > 0:
+            curves.append({"type": "Circle", "center_xy": [0, 0], "radius": id_val / 2})
+
+        operations.append({"type": "Sketch", "name": "BaseSketch", "parameters": {"curves": curves}})
+        operations.append({"type": "Extrude", "name": "BaseExtrude", "parameters": {"distance": height}})
+
+        # 2. Bolt Holes (Only add if the list exists AND is not empty)
+        # CHANGE HERE: Check "and measurements['bolt_holes']"
+        if "bolt_holes" in measurements and measurements['bolt_holes']:
+            hole_curves = []
+            for h in measurements['bolt_holes']:
+                hole_curves.append({
+                    "type": "Circle",
+                    "center_xy": list(h['position_xy_mm']),
+                    "radius": h['diameter_mm'] / 2
+                })
+
+            # Double check we actually made curves before adding operations
+            if hole_curves:
+                operations.append({"type": "Sketch", "name": "HoleSketch", "parameters": {"curves": hole_curves}})
+                operations.append({
+                    "type": "Extrude",
+                    "name": "HoleCut",
+                    "parameters": {"distance": -height, "operation_type": "Cut"}
+                })
+
+    # ... (rest of the function for cuboid/l_clamp remains the same)
+
+    elif shape_type == "cuboid":
+        length = measurements.get('length_mm', 0)
+        width = measurements.get('width_mm', 0)
+        height = measurements.get('height_mm', 0)
+        curves = [{"type": "Rectangle", "center_xy": [0, 0], "length": length, "width": width}]
+        operations.append({"type": "Sketch", "name": "BaseSketch", "parameters": {"curves": curves}})
+        operations.append({"type": "Extrude", "name": "BaseExtrude", "parameters": {"distance": height}})
+
+
+    elif shape_type == "l_clamp":
+        length = measurements.get('overall_length_mm', 0)  # The long leg (X axis)
+        width = measurements.get('overall_width_mm', 0)  # The short leg (Y axis)
+        thickness = measurements.get('estimated_thickness_mm', 0)
+        height = measurements.get('height_mm', 0)  # Extrusion depth (Z axis)
+        curves = []
+        # Line 1: Bottom Edge (0,0 to Length,0)
+        curves.append({"type": "Line", "start_xy": [0, 0], "end_xy": [length, 0]})
+        # Line 2: Right Tip (Upwards)
+        curves.append({"type": "Line", "start_xy": [length, 0], "end_xy": [length, thickness]})
+        # Line 3: Inner Horizontal (Back towards corner)
+        curves.append({"type": "Line", "start_xy": [length, thickness], "end_xy": [thickness, thickness]})
+        # Line 4: Inner Vertical (Upwards)
+        curves.append({"type": "Line", "start_xy": [thickness, thickness], "end_xy": [thickness, width]})
+        # Line 5: Top Tip (Leftwards)
+        curves.append({"type": "Line", "start_xy": [thickness, width], "end_xy": [0, width]})
+        # Line 6: Left Edge (Down to Origin - Closing the loop)
+        curves.append({"type": "Line", "start_xy": [0, width], "end_xy": [0, 0]})
+        # Add Operations
+        operations.append({"type": "Sketch", "name": "ProfileSketch", "parameters": {"curves": curves}})
+        operations.append({"type": "Extrude", "name": "MainExtrude", "parameters": {"distance": height}})
+
+    output = {
+        "metadata": {
+            "source_image": source_filename,
+            "component_type": shape_type,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        },
+        "operations": operations
+    }
+    return json.dumps(output, indent=4, default=lambda x: round(x, 2))
+
+
+def visualize_measurements(image, shape_type, main_contour, children, measurements):
+    vis_image = image.copy()
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
+    if shape_type == "cylinder":
+        # 1. Draw Main OD
+        (x_main, y_main), radius = cv2.minEnclosingCircle(main_contour)
+        center_main = np.array([x_main, y_main])
+        cv2.circle(vis_image, (int(x_main), int(y_main)), int(radius), (0, 0, 255), 2)
+        od = measurements.get('outer_diameter_mm', 0)
+        cv2.putText(vis_image, f"OD: {od:.2f}mm", (int(x_main - radius), int(y_main - radius - 10)), font, 0.6,
+                    (0, 0, 255), 2)
+
+        # --- LOGIC UPDATE: Separate Center Hole (ID) from Bolt Holes ---
+        id_contour = None
+        bolt_hole_contours = []
+        origin_xy = (int(x_main), int(y_main))  # Default origin is disk center
+
+        if children:
+            # Find the hole closest to the geometric center (Just like in measure_cylinder)
+            closest_index = -1
+            min_distance = float('inf')
+            child_data = []
+
+            for i, child in enumerate(children):
+                (cx, cy), r = cv2.minEnclosingCircle(child)
+                dist = np.linalg.norm(center_main - np.array([cx, cy]))
+                child_data.append({'contour': child, 'center': (cx, cy), 'radius': r})
+
+                if dist < min_distance:
+                    min_distance = dist
+                    closest_index = i
+
+            # Check if valid ID exists (Distance < 15% of OD Radius)
+            if closest_index != -1 and min_distance < (radius * 0.15):
+                id_contour = child_data[closest_index]['contour']
+                # Update Origin to be the precise center of this ID hole
+                origin_xy = (int(child_data[closest_index]['center'][0]), int(child_data[closest_index]['center'][1]))
+
+                # The rest are bolt holes
+                for i, data in enumerate(child_data):
+                    if i != closest_index:
+                        bolt_hole_contours.append(data['contour'])
+            else:
+                # No center hole found -> All are bolt holes
+                bolt_hole_contours = [d['contour'] for d in child_data]
+
+        # 2. Draw ID (if found)
+        if id_contour is not None:
+            (ix, iy), id_radius = cv2.minEnclosingCircle(id_contour)
+            cv2.circle(vis_image, (int(ix), int(iy)), int(id_radius), (0, 255, 0), 2)
+            id_val = measurements.get('inner_diameter_mm', 0)
+            cv2.putText(vis_image, f"ID: {id_val:.2f}mm", (int(ix) + 10, int(iy)), font, 0.6, (0, 255, 0), 2)
+
+        # 3. Draw Bolt Holes
+        # Sort them (Top-Left to Bottom-Right) for consistent labeling H1, H2...
+        # A common way to sort "reading order" is (y + x) or just y
+        if bolt_hole_contours:
+            # Sort by Y coordinate roughly to label top-down
+            bolt_hole_contours = sorted(bolt_hole_contours, key=lambda c: cv2.boundingRect(c)[1])
+
+            for i, hole_contour in enumerate(bolt_hole_contours):
+                (hx, hy), h_radius = cv2.minEnclosingCircle(hole_contour)
+                cv2.circle(vis_image, (int(hx), int(hy)), int(h_radius), (0, 255, 0), 2)
+
+                # Check if we have measurement data for this hole
+                if "bolt_holes" in measurements and i < len(measurements['bolt_holes']):
+                    # We can't easily match contour index to json index after sorting,
+                    # so we just display the diameter from the contour geometry itself for visualization
+                    # or just label "H1", "H2"
+                    h_dia = (h_radius * 2) / (radius * 2 / od)  # Approximate back-calculation or just use generic label
+                    cv2.putText(vis_image, f"H{i + 1}", (int(hx) - 10, int(hy) + 5), font, 0.5, (0, 255, 0), 2)
+
+        # 4. Draw Origin / Crosshair (Moved OUTSIDE loops)
+        cx, cy = origin_xy
+        # Blue Axis (X)
+        cv2.line(vis_image, (cx - 40, cy), (cx + 40, cy), (255, 0, 0), 2)
+        # Red Axis (Y)
+        cv2.line(vis_image, (cx, cy - 40), (cx, cy + 40), (0, 0, 255), 2)
+        # Yellow Center Dot
+        cv2.circle(vis_image, (cx, cy), 4, (0, 255, 255), -1)
+        # ... handle other shapes (cuboid, etc) ...
+        return vis_image
+
+    elif shape_type == "cuboid":
+        rect = cv2.minAreaRect(main_contour)
+        box = np.intp(cv2.boxPoints(rect))
+        cv2.drawContours(vis_image, [box], 0, (0, 0, 255), 2)
+        length = measurements.get('length_mm', 0)
+        width = measurements.get('width_mm', 0)
+        cv2.putText(vis_image, f"L: {length:.2f}mm", (box[0][0] - 80, box[0][1]), font, 0.6, (0, 0, 255), 2)
+        cv2.putText(vis_image, f"W: {width:.2f}mm", (box[1][0], box[1][1] - 10), font, 0.6, (0, 0, 255), 2)
+
+    else:
+        cv2.drawContours(vis_image, [main_contour], -1, (0, 0, 255), 2)
+        for child in children:
+            cv2.drawContours(vis_image, [child], -1, (0, 255, 0), 2)
+    return vis_image
+
+
+def process_component(top_view_path, side_view_path):
+    print(f"\nProcessing component: {os.path.basename(top_view_path)}")
+
+    # 1. Image Processing & Contour Detection
+    top_image, top_contours, top_hierarchy = get_top_view_contours(top_view_path, debug=False)
+    if not top_contours or top_hierarchy is None:
+        print("  -> Could not find any contours or hierarchy in the top view.")
+        return
+
+    main_contour = max(top_contours, key=cv2.contourArea)
+    gray = cv2.cvtColor(top_image, cv2.COLOR_BGR2GRAY)
+
+    # Create mask to find internal holes
+    main_mask = np.zeros_like(gray)
+    cv2.drawContours(main_mask, [main_contour], -1, 255, -1)
+
+    disk_area = cv2.contourArea(main_contour)
+    min_hole_area = disk_area * 0.005
+    children = []
+
+    # Filter for valid holes
+    # Filter for valid holes
+    for c in top_contours:
+        if np.array_equal(c, main_contour):
+            continue
+
+        test_point = tuple(c[0][0])
+        # Check if contour is inside the main object
+        if main_mask[test_point[1], test_point[0]] == 255:
+            area = cv2.contourArea(c)
+            if area > min_hole_area:
+                perimeter = cv2.arcLength(c, True)
+                if perimeter > 0:
+                    circularity = (4 * np.pi * area) / (perimeter ** 2)
+                    if circularity > 0.7:
+                        # --- NEW CODE START: Color Validation ---
+                        # 1. Create a mask for this specific hole candidate
+                        hole_mask = np.zeros_like(gray)
+                        cv2.drawContours(hole_mask, [c], -1, 255, -1)
+
+                        # 2. Check the average color inside this contour from the original top_image
+                        # mean_val returns (Blue, Green, Red, Alpha)
+                        mean_val = cv2.mean(top_image, mask=hole_mask)
+                        b, g, r = mean_val[0], mean_val[1], mean_val[2]
+
+                        # 3. Logic: If the area is predominantly Green, it is a reflection on the part.
+                        # Real holes (background) should have R, G, B values close to each other (Grey/White).
+                        # We allow a small margin, but if Green is 10% stronger than Red/Blue, it's a fake hole.
+                        if g > (r * 1.1) and g > (b * 1.1):
+                            # print(f"Ignored fake hole (reflection) with Green dominance: {g:.1f} vs R:{r:.1f} B:{b:.1f}")
+                            continue
+                            # --- NEW CODE END ---
+
+                        children.append(c)
+        # --- NEW CODE START: Smart Nested Hole Filter (Shadow vs Chamfer) ---
+        final_holes = []
+
+        # 1. Sort holes by Area (Largest to Smallest)
+        children_sorted = sorted(children, key=cv2.contourArea, reverse=True)
+
+        for candidate in children_sorted:
+            # Calculate properties of the candidate
+            M_cand = cv2.moments(candidate)
+            if M_cand["m00"] == 0: continue
+            cx_cand = int(M_cand["m10"] / M_cand["m00"])
+            cy_cand = int(M_cand["m01"] / M_cand["m00"])
+            center_cand = (cx_cand, cy_cand)
+
+            parent_idx = -1
+
+            # 2. Check if this candidate is inside an already accepted hole
+            for i, existing in enumerate(final_holes):
+                if cv2.pointPolygonTest(existing, center_cand, False) >= 0:
+                    parent_idx = i
+                    break
+
+            # 3. LOGIC: If it's NOT inside anything, keep it.
+            if parent_idx == -1:
+                final_holes.append(candidate)
+
+            # 4. LOGIC: If it IS inside a parent, decide which one is real.
+            else:
+                parent_contour = final_holes[parent_idx]
+
+                # Create a mask for the "Gap" (The donut shape between parent and candidate)
+                mask_gap = np.zeros_like(gray)
+                cv2.drawContours(mask_gap, [parent_contour], -1, 255, -1)
+                cv2.drawContours(mask_gap, [candidate], -1, 0, -1)  # Subtract inner
+
+                # Create a mask for the "Hole Center" (The candidate itself)
+                mask_inner = np.zeros_like(gray)
+                cv2.drawContours(mask_inner, [candidate], -1, 255, -1)
+
+                # Calculate average brightness
+                # We assume the background (hole center) is lighter than the object
+                mean_gap = cv2.mean(gray, mask=mask_gap)[0]
+                mean_inner = cv2.mean(gray, mask=mask_inner)[0]
+
+                # COMPARISON:
+                # If the Gap is significantly DARKER than the Inner Hole,
+                # it means the Gap is part of the Object (Plastic).
+                # Therefore, the Parent was just a Chamfer/Bevel.
+                # ACTION: Swap them (Remove Parent, Keep Candidate).
+                if mean_gap < (mean_inner * 0.85):  # Threshold: Gap is 15% darker
+                    # print("Found Chamfer! Swapping Parent (Fake) for Child (Real ID).")
+                    final_holes[parent_idx] = candidate
+
+                # Else: The Gap is bright (Paper/Background).
+                # It means the Candidate is just a Shadow on the table.
+                # ACTION: Ignore Candidate, Keep Parent.
+                else:
+                    pass  # Do nothing, effectively discarding the shadow candidate
+
+        children = final_holes
+        # --- NEW CODE END ---
+    # 2. Shape Classification & Measurement
+    shape_type = classify_shape(top_contours)
+    height = measure_height_from_side_view(side_view_path, PPM_SIDE)
+    measurements = {"height_mm": height}
+
+    if shape_type == "cylinder":
+        measurements.update(measure_cylinder(main_contour, children, PPM_TOP))
+    elif shape_type == "cuboid":
+        measurements.update(measure_cuboid(main_contour, PPM_TOP))
+    elif shape_type == "l_clamp":
+        measurements.update(measure_l_clamp(main_contour, PPM_TOP))
+    else:
+        measurements["info"] = "Unknown shape - basic measurements only"
+
+    # 3. Preparation for Saving
+    base_filename = os.path.splitext(os.path.basename(top_view_path))[0]
+    output_vis_path = os.path.join(OUTPUT_FOLDER, f"{base_filename}_annotated.jpg")
+    output_json_path = os.path.join(OUTPUT_FOLDER, f"{base_filename}.json")
+
+    annotated_image = visualize_measurements(top_image, shape_type, main_contour, children, measurements)
+    json_output = generate_cad_json(shape_type, measurements, os.path.basename(top_view_path))
+
+    # 4. SAVE EVERYTHING (Automatic - No waiting)
+    # Save Image
+    cv2.imwrite(output_vis_path, annotated_image)
+    print(f"  -> Saved annotated image to {output_vis_path}")
+
+    # Save JSON
+    try:
+        with open(output_json_path, 'w') as f:
+            f.write(json_output)
+        print(f"  -> Successfully saved measurements to {output_json_path}")
+    except Exception as e:
+        print(f"  -> Error saving JSON: {e}")
+
+    # 5. SHOW RESULT (Non-blocking)
+    cv2.imshow("Measurement Visualization", annotated_image)
+    # 1000ms delay allows the script to continue to the next image automatically
+    cv2.waitKey(1000)
+
+
+
+if __name__ == "__main__":
+    print("--- Starting Measurement Process ---")
+
+    # 1. Setup Argument Parser to catch commands from the Automation Script
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--top', help="Path to top view image")
+    parser.add_argument('--left', help="Path to left (side) view image")  # Automation sends 'left'
+    parser.add_argument('--side', help="Path to side view image (alternate)")
+    parser.add_argument('--output', help="Path to output directory")
+    args, unknown = parser.parse_known_args()
+
+    # 2. CHECK: Are we running via Automation (Arguments provided)?
+    if args.top and (args.left or args.side) and args.output:
+        print(f"-> Mode: Single Component (Automation)")
+
+        # The automation script sends 'left.png' as the side view
+        side_view_path = args.left if args.left else args.side
+        top_view_path = args.top
+
+        # Overwrite the global OUTPUT_FOLDER with the one from automation
+        OUTPUT_FOLDER = args.output
+        if not os.path.exists(OUTPUT_FOLDER):
+            os.makedirs(OUTPUT_FOLDER)
+
+        if os.path.exists(top_view_path) and os.path.exists(side_view_path):
+            try:
+                # Run your existing logic on these specific files
+                process_component(top_view_path, side_view_path)
+            except Exception as e:
+                print(f"Error processing component: {e}")
+        else:
+            print(f"Error: One of the input files does not exist.\nTop: {top_view_path}\nSide: {side_view_path}")
+
+    # 3. FALLBACK: No arguments? Run the old Batch Mode (Hardcoded Folders)
+    else:
+        print(f"-> Mode: Batch Directory Scan (Default)")
+        print(f"-> Scanning folder: {INPUT_FOLDER}")
+
+        if not os.path.exists(INPUT_FOLDER):
+            print(f"Error: Input folder not found: {INPUT_FOLDER}")
+        else:
+            all_files = os.listdir(INPUT_FOLDER)
+            top_view_files = [f for f in all_files if 'top' in f.lower() and f.endswith(('.png', '.jpg', '.jpeg'))]
+
+            if not top_view_files:
+                print(f"Error: No top-view images found in {INPUT_FOLDER}.")
+            else:
+                for top_file in top_view_files:
+                    # Logic to find matching side file
+                    base_name = os.path.splitext(top_file)[0].lower().replace('_top', '').replace('top', '')
+                    side_file = None
+                    for f in all_files:
+                        f_base = os.path.splitext(f)[0].lower().replace('_side', '').replace('side', '')
+                        # Look for 'side' or 'left' in the filename
+                        if f_base == base_name and ('side' in f.lower() or 'left' in f.lower()):
+                            side_file = f
+                            break
+
+                    if side_file:
+                        top_path = os.path.join(INPUT_FOLDER, top_file)
+                        side_path = os.path.join(INPUT_FOLDER, side_file)
+                        process_component(top_path, side_path)
+                    else:
+                        print(f"Warning: Found top view '{top_file}' but no corresponding side/left view.")
+
+    cv2.destroyAllWindows()
+    print("\n--- Process Finished ---")
