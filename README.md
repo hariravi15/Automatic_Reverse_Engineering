@@ -8,7 +8,7 @@ The complete source code, dataset, pre-trained model and camera controls will be
 
 - [x] ML Training Code
 - [ ] Pre-Trained Model
-- [ ] Dataset Generation Code
+- [x] Dataset Generation Code
 - [x] Measurment Script
 - [ ] Nx-Open Wrapper
 - [x] Intel Realsense Controls
