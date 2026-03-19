@@ -3,13 +3,10 @@ import sys
 import os
 from pathlib import Path
 
-# --- CONFIGURATION ---
-INPUT_FOLDER = r"D:\Automtion\Merge_Output"
-# Where to save the generated NX Python script
-NX_SCRIPT_OUTPUT_FOLDER = r"D:\Automtion\Merge_Output_NX"
-# Where the final NX CAD Part (.prt) will be saved
-CAD_OUTPUT_FOLDER = r"D:\Automtion\CAD_Output"
 
+INPUT_FOLDER = r"D:\Automtion\Merge_Output"
+NX_SCRIPT_OUTPUT_FOLDER = r"D:\Automtion\Merge_Output_NX"
+CAD_OUTPUT_FOLDER = r"D:\Automtion\CAD_Output"
 INPUT_UNIT = "mm"
 
 
@@ -32,7 +29,7 @@ def parse_tokens_to_nx_script(tokens: list, input_filename: str) -> str:
     lines.append(f'    print("Generating NX model from: {input_filename}")')
     lines.append("")
 
-    # Buffer now holds both circles and lines
+
     pending_sketch = {
         "active": False,
         "plane": "XY",
@@ -44,9 +41,7 @@ def parse_tokens_to_nx_script(tokens: list, input_filename: str) -> str:
     while i < len(tokens):
         token = tokens[i]
 
-        # ---------------------------------------------------------
-        # 1. Handle Sketch Start
-        # ---------------------------------------------------------
+
         if token.startswith("plane="):
             plane_name_raw = token.split("=")[1]
             if i + 1 < len(tokens) and tokens[i + 1] == "ENTITY_START__Sketch":
@@ -67,9 +62,7 @@ def parse_tokens_to_nx_script(tokens: list, input_filename: str) -> str:
                 }
                 i += 1
 
-        # ---------------------------------------------------------
-        # 2. Handle Circles
-        # ---------------------------------------------------------
+
         elif token == "CURVE_START__Circle":
             params = {}
             j = i + 1
@@ -86,9 +79,7 @@ def parse_tokens_to_nx_script(tokens: list, input_filename: str) -> str:
                 pending_sketch["circles"].append(params)
             i = j
 
-        # ---------------------------------------------------------
-        # 3. Handle Lines (NEW)
-        # ---------------------------------------------------------
+
         elif token == "CURVE_START__Line":
             params = {}
             j = i + 1
@@ -105,9 +96,7 @@ def parse_tokens_to_nx_script(tokens: list, input_filename: str) -> str:
                 pending_sketch["lines"].append(params)
             i = j
 
-        # ---------------------------------------------------------
-        # 4. Handle Extrusion
-        # ---------------------------------------------------------
+
         elif token == "ENTITY_START__Extrude":
             params = {}
             j = i + 1
@@ -127,23 +116,20 @@ def parse_tokens_to_nx_script(tokens: list, input_filename: str) -> str:
                     plane = pending_sketch["plane"]
                     is_creation = (op_type in ["NewBody", "Join"])
 
-                    # --- LOGIC BRANCHING ---
 
-                    # CASE A: We have LINES (L-Clamp, Rectangles, Profiles)
                     if lines_data:
                         lines.append(f'    # --- Profile Feature (Lines) ---')
                         lines.append(f'    nx.create_plane("{plane}")')
 
-                        # Draw all lines
+
                         for l in lines_data:
                             lines.append(
                                 f'    nx.sketch_line({l["start_x"]} * SCALE, {l["start_y"]} * SCALE, {l["end_x"]} * SCALE, {l["end_y"]} * SCALE)')
 
-                        # Extrude the profile (Body)
                         nx_op = "Create" if is_creation else "Subtract"
                         lines.append(f'    nx.extrude({dist_val} * SCALE, operation="{nx_op}")')
 
-                        # If there are ALSO circles in this sketch block, they are likely holes inside that profile
+
                         if circles:
                             lines.append(f'    # --- Holes inside Profile ---')
                             lines.append(f'    nx.create_plane("{plane}")')
@@ -152,10 +138,10 @@ def parse_tokens_to_nx_script(tokens: list, input_filename: str) -> str:
                                     f'    nx.sketch_circle({c["center_x"]} * SCALE, {c["center_y"]} * SCALE, {c["radius"]} * SCALE)')
                             lines.append(f'    nx.extrude({dist_val} * SCALE, operation="Subtract")')
 
-                    # CASE B: ONLY CIRCLES (Cylinders, Holes)
+
                     elif circles:
                         if is_creation and len(circles) > 1:
-                            # Smart Split: Largest = Body, Rest = Holes
+
                             largest = max(circles, key=lambda c: c['radius'])
                             holes = [c for c in circles if c != largest]
 
@@ -173,7 +159,7 @@ def parse_tokens_to_nx_script(tokens: list, input_filename: str) -> str:
                                         f'    nx.sketch_circle({h["center_x"]} * SCALE, {h["center_y"]} * SCALE, {h["radius"]} * SCALE)')
                                 lines.append(f'    nx.extrude({dist_val} * SCALE, operation="Subtract")')
                         else:
-                            # Standard Single Circle or Explicit Cut
+ 
                             nx_op = "Create"
                             if op_type == "Cut":
                                 nx_op = "Subtract"
@@ -190,7 +176,7 @@ def parse_tokens_to_nx_script(tokens: list, input_filename: str) -> str:
                 except ValueError:
                     pass
 
-            # Reset Buffer
+
             pending_sketch = {"active": False, "plane": "XY", "circles": [], "lines": []}
             i = j
 
@@ -220,12 +206,12 @@ def get_latest_file(folder_path: Path) -> Path:
 
 
 def main():
-    # 1. Check/Create Output Dir for NX Scripts
+
     nx_out_path = Path(NX_SCRIPT_OUTPUT_FOLDER)
     if not nx_out_path.exists():
         os.makedirs(nx_out_path)
 
-    # Check/Create Output Dir for CAD Parts
+
     cad_out_path = Path(CAD_OUTPUT_FOLDER)
     if not cad_out_path.exists():
         os.makedirs(cad_out_path)
@@ -236,7 +222,7 @@ def main():
         print(f"Error: {e}")
         return
 
-    # Save the .py file to D:\Automtion\Merge_Output_NX
+
     output_py_path = nx_out_path / (json_path.stem + "_nx_journal.py")
 
     print(f"Loading tokens from: {json_path}")
