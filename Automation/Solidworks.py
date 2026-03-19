@@ -4,10 +4,10 @@ import time
 import os
 
 
-API_ACCESS_KEY = 'on_kdmrk2iumIHsYp2FOvYyg'
-API_SECRET_KEY = 'gKBYn2dfEptL8OFY83YYKD55jYd044crqRSguzfOWPnrpIuK'
+API_ACCESS_KEY = 'Your access key'
+API_SECRET_KEY = 'Your secret key'
 BASE_URL = 'https://cad.onshape.com'
-OUTPUT_DIR = r"C:\Users\hr73\PycharmProjects\Reverse_engineeering\Automation\CAD_Output"
+OUTPUT_DIR = r"Path to your folder"
 
 
 def make_request(method, endpoint, headers=None, body=None):
