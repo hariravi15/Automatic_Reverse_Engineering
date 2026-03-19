@@ -2,11 +2,11 @@ import json
 import sys
 from pathlib import Path
 
-INPUT_FOLDER = r"D:\Automtion\Merge_Output"
+INPUT_FOLDER = r"Path to your folder"
 INPUT_UNIT = "mm"
 
-NEW_ACCESS_KEY = "on_kdmrk2iumIHsYp2FOvYyg"
-NEW_SECRET_KEY = "gKBYn2dfEptL8OFY83YYKD55jYd044crqRSguzfOWPnrpIuK"
+NEW_ACCESS_KEY = "Your access Key"
+NEW_SECRET_KEY = "Your screat key"
 
 
 def parse_tokens_to_script(tokens: list, input_filename: str) -> str:
@@ -29,10 +29,10 @@ def parse_tokens_to_script(tokens: list, input_filename: str) -> str:
     lines.append('with open(config_path, "w") as f:')
     lines.append('    f.write(config_content)')
 
-    # 2. TELL ONSHAPE TO USE THIS FILE
+
     lines.append('os.environ["ONSHAPE_CLIENT_CONFIG_FILE"] = config_path')
 
-    # 3. NOW IMPORT ONPY
+
     lines.append("import onpy")
     lines.append("")
 
@@ -48,7 +48,7 @@ def parse_tokens_to_script(tokens: list, input_filename: str) -> str:
     lines.append("def main():")
     lines.append(f'    print("Generating model from: {input_filename}")')
 
-    # Debug print to prove we are using the new keys
+
     lines.append(f'    print(f"Using Access Key: {{ACCESS_KEY[:5]}}... (Should be your NEW key)")')
     lines.append(f'    # Create document and get default partstudio')
     doc_name = Path(input_filename).stem
@@ -71,7 +71,7 @@ def parse_tokens_to_script(tokens: list, input_filename: str) -> str:
     while i < len(tokens):
         token = tokens[i]
 
-        # -- 2. Handle Sketch Start --
+
         if token.startswith("plane="):
             plane_name_raw = token.split("=")[1]
             if i + 1 < len(tokens) and tokens[i + 1] == "ENTITY_START__Sketch":
@@ -94,7 +94,7 @@ def parse_tokens_to_script(tokens: list, input_filename: str) -> str:
                 sketch_counter += 1
                 i += 1
 
-        # -- 3a. Handle Circles --
+
         elif token == "CURVE_START__Circle":
             params = {}
             j = i + 1
@@ -110,7 +110,7 @@ def parse_tokens_to_script(tokens: list, input_filename: str) -> str:
                 pending_sketch["circles"].append(params)
             i = j
 
-        # -- 3b. Handle Lines --
+
         elif token == "CURVE_START__Line":
             params = {}
             j = i + 1
@@ -126,7 +126,7 @@ def parse_tokens_to_script(tokens: list, input_filename: str) -> str:
                 pending_sketch["lines"].append(params)
             i = j
 
-        # -- 4. Handle Extrusion --
+
         elif token == "ENTITY_START__Extrude":
             params = {}
             j = i + 1
@@ -161,9 +161,7 @@ def parse_tokens_to_script(tokens: list, input_filename: str) -> str:
                                     f'    {sketch_var}.add_circle(center=({c["center_x"]} * SCALE, {c["center_y"]} * SCALE), radius={c["radius"]} * SCALE)')
                                 lines.append(f'    time.sleep(0.1)')  # <--- TINY PAUSE PER CIRCLE
 
-                    # -------------------------------------------------
-                    # CASE A: LINES EXIST (Profile / Rectangles / L-Shapes)
-                    # -------------------------------------------------
+
                     if lines_data:
                         s_name = pending_sketch["name"]
                         lines.append(f'    # --- Profile Feature (Lines) ---')
@@ -183,21 +181,21 @@ def parse_tokens_to_script(tokens: list, input_filename: str) -> str:
                             lines.append(f'            distance={distance_val} * SCALE,')
                             lines.append(f'            subtract_from=main_part')
                             lines.append(f'        )')
-                            # --- FIXED: Added missing sleep for Cut ---
+
                             lines.append(f'        time.sleep(1.0)')
                         else:
                             lines.append(f'    ext_feat = partstudio.add_extrude(')
                             lines.append(f'        faces={s_name},')
                             lines.append(f'        distance={distance_val} * SCALE')
                             lines.append(f'    )')
-                            lines.append(f'    time.sleep(1.0)')  # This one was correct
+                            lines.append(f'    time.sleep(1.0)')  
 
                             lines.append(f'    try:')
                             lines.append(f'        parts = ext_feat.get_created_parts()')
                             lines.append(f'        if parts: main_part = parts[0]')
                             lines.append(f'    except: pass')
 
-                        # IF there are also circles (Holes inside profile)
+
                         if circles:
                             hole_sketch_name = f"{s_name}_holes"
                             lines.append(f'    # --- Holes inside Profile ---')
@@ -216,19 +214,17 @@ def parse_tokens_to_script(tokens: list, input_filename: str) -> str:
                             lines.append(f'            distance={distance_val} * SCALE,')
                             lines.append(f'            subtract_from=main_part')
                             lines.append(f'        )')
-                            # --- FIXED: Added missing sleep for Holes ---
+
                             lines.append(f'        time.sleep(1.0)')
 
-                            # -------------------------------------------------
-                    # CASE B: ONLY CIRCLES (Cylinders / Holes)
-                    # -------------------------------------------------
+
                     elif circles:
                         if is_creation_event and len(circles) > 1:
-                            # --- SMART SPLIT LOGIC ---
+
                             largest_circle = max(circles, key=lambda c: c['radius'])
                             holes = [c for c in circles if c != largest_circle]
 
-                            # 1. Base Body
+
                             base_sketch_name = pending_sketch["name"]
                             lines.append(f'    # Smart Generation: Separating Body from Holes')
                             lines.append(f'    {base_sketch_name} = partstudio.add_sketch(')
@@ -242,7 +238,7 @@ def parse_tokens_to_script(tokens: list, input_filename: str) -> str:
                             lines.append(f'        faces={base_sketch_name},')
                             lines.append(f'        distance={distance_val} * SCALE')
                             lines.append(f'    )')
-                            # --- FIXED: Added missing sleep for Smart Base ---
+
                             lines.append(f'    time.sleep(1.0)')
 
                             lines.append(f'    try:')
@@ -250,7 +246,7 @@ def parse_tokens_to_script(tokens: list, input_filename: str) -> str:
                             lines.append(f'        if parts: main_part = parts[0]')
                             lines.append(f'    except: pass')
 
-                            # 2. Holes
+
                             if holes:
                                 hole_sketch_name = f"{base_sketch_name}_holes"
                                 lines.append(f'    {hole_sketch_name} = partstudio.add_sketch(')
@@ -267,10 +263,10 @@ def parse_tokens_to_script(tokens: list, input_filename: str) -> str:
                                 lines.append(f'            distance={distance_val} * SCALE,')
                                 lines.append(f'            subtract_from=main_part')
                                 lines.append(f'        )')
-                                # --- FIXED: Added missing sleep for Smart Holes ---
+
                                 lines.append(f'        time.sleep(1.0)')
 
-                        # --- STANDARD LOGIC ---
+
                         else:
                             s_name = pending_sketch["name"]
                             lines.append(f'    # Standard Sketch Generation')
@@ -290,14 +286,14 @@ def parse_tokens_to_script(tokens: list, input_filename: str) -> str:
                                 lines.append(f'            distance={distance_val} * SCALE,')
                                 lines.append(f'            subtract_from=main_part')
                                 lines.append(f'        )')
-                                # --- FIXED: Added missing sleep for Standard Cut ---
+
                                 lines.append(f'        time.sleep(1.0)')
                             else:
                                 lines.append(f'    ext_feat = partstudio.add_extrude(')
                                 lines.append(f'        faces={s_name},')
                                 lines.append(f'        distance={distance_val} * SCALE')
                                 lines.append(f'    )')
-                                # --- FIXED: Changed 0.5 to 1.0 for consistency ---
+
                                 lines.append(f'    time.sleep(1.0)')
 
                                 lines.append(f'    try:')
@@ -315,7 +311,7 @@ def parse_tokens_to_script(tokens: list, input_filename: str) -> str:
         elif token == "<eos>":
             lines.append("")
             lines.append('    print("Model generation instructions sent to Onshape.")')
-            # CLEANUP: Remove the temp config file so it doesn't clutter
+
             lines.append('    try:')
             lines.append('        if os.path.exists(config_path): os.remove(config_path)')
             lines.append('    except: pass')
