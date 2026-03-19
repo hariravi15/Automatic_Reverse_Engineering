@@ -6,18 +6,18 @@ from pathlib import Path
 ML_SEQUENCE_FOLDER = "D:\Automtion\ML_output"
 DIMENSION_FOLDER = "D:\Automtion\Mes_output"
 OUTPUT_FOLDER = "D:\Automtion\Merge_Output"
-TIME_INTERVAL = 0 # 0 is no looop
+TIME_INTERVAL = 0 
 
 
 def get_latest_file(folder_path: Path) -> Path:
     """Finds the most recently modified .json file, searching through subfolders."""
-    # The rglob('*.json') searches all subdirectories recursively
+
     files = list(folder_path.rglob('*.json'))
 
     if not files:
         raise FileNotFoundError(f"No .json files found in {folder_path} or its subfolders")
 
-    # Sort by modification time to get the absolute newest file
+
     latest_file = max(files, key=lambda p: p.stat().st_mtime)
     return latest_file
 
@@ -39,25 +39,21 @@ def merge_files(dim_file_path: Path, seq_file_path: Path) -> dict:
     for operation in dim_data.get('operations', []):
         op_type = operation.get('type')
 
-        # --- NEW BLOCK: Handle High-Level Features (L-Clamp) ---
         if op_type == "Feature":
             feat_name = operation.get('name')
             params = operation.get('parameters', {})
 
             if feat_name == "L-Clamp":
-                # Extract Dimensions
+ 
                 L = params.get('length', 50)
                 W = params.get('width', 50)
                 H = params.get('height', 20)
                 T = params.get('thickness', 5)
 
-                # 1. Start Sketch
+
                 output_tokens.append("plane=XY")
                 output_tokens.append("ENTITY_START__Sketch")
 
-                # 2. Generate L-Shape Geometry (6 Lines)
-                # We start at (0,0) and draw counter-clockwise
-                # P1(0,0) -> P2(L,0) -> P3(L,T) -> P4(T,T) -> P5(T,W) -> P6(0,W) -> Close
 
                 points = [
                     (0, 0),
@@ -70,7 +66,7 @@ def merge_files(dim_file_path: Path, seq_file_path: Path) -> dict:
 
                 for i in range(len(points)):
                     p_start = points[i]
-                    p_end = points[(i + 1) % len(points)]  # Wrap around to 0 for last line
+                    p_end = points[(i + 1) % len(points)]  
 
                     output_tokens.append("CURVE_START__Line")
                     output_tokens.append(f"start_x={p_start[0]}")
@@ -81,7 +77,7 @@ def merge_files(dim_file_path: Path, seq_file_path: Path) -> dict:
 
                 output_tokens.append("ENTITY_END__Sketch")
 
-                # 3. Extrude
+
                 output_tokens.append("ENTITY_START__Extrude")
                 output_tokens.append("operation_type=NewBody")
                 output_tokens.append(f"distance={H}")
@@ -114,7 +110,7 @@ def merge_files(dim_file_path: Path, seq_file_path: Path) -> dict:
                 if extrude_op_index < len(template_op_types):
                     op_type_param = template_op_types[extrude_op_index]
                 else:
-                    op_type_param = "NewBody"  # Default if template runs out
+                    op_type_param = "NewBody"  
             extrude_op_index += 1
             if main_extrude_dist is None:
                 main_extrude_dist = abs(distance)
