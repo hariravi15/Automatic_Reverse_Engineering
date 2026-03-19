@@ -1,18 +1,18 @@
 import time
 import os
-import shutil # Used for copying files
+import shutil 
 
-ML_SCRIPT_DIR = r"C:\Users\hr73\PycharmProjects\Reverse_engineeering\ml"
+ML_SCRIPT_DIR = r"Path to script"
 ML_SCRIPT_NAME = "MV_unified_3.py"
 CONDA_ENV = "reverse_engineeering"
-WATCH_DIR = r"D:\Automtion\input"
-MEASUREMENT_INPUT_DIR = r"D:\Automtion\Measurement_Input"
-MEASURE_SCRIPT_PATH = r"C:\Users\hr73\PycharmProjects\Reverse_engineeering\Measurment\Measurment.py"
-MERGE_SCRIPT_PATH = r"C:\Users\hr73\PycharmProjects\Reverse_engineeering\Automation\merge_script.py"
-ONSHAPE_CONVERT_PATH = r"C:\Users\hr73\PycharmProjects\Reverse_engineeering\Automation\Onshape.py"
-SOLIDWORKS_EXPORT_PATH = r"C:\Users\hr73\PycharmProjects\Reverse_engineeering\Automation\Solidworks.py"
-NX_CONVERT_PATH = r"C:\Users\hr73\PycharmProjects\Reverse_engineeering\Automation\NX.py"
-NX_JOURNAL_EXE_PATH = r"C:\Program Files\Siemens\NX1980\NXBIN\run_journal.exe"
+WATCH_DIR = r"Path to input folder"
+MEASUREMENT_INPUT_DIR = r"path to measurment script"
+MEASURE_SCRIPT_PATH = r"\Measurment\Measurment.py"
+MERGE_SCRIPT_PATH = r"\Automation\merge_script.py"
+ONSHAPE_CONVERT_PATH = r"\Automation\Onshape.py"
+SOLIDWORKS_EXPORT_PATH = r"\Automation\Solidworks.py"
+NX_CONVERT_PATH = r"\Automation\NX.py"
+NX_JOURNAL_EXE_PATH = r"C:\Program Files\Siemens\NX1980\NXBIN\run_journal.exe" # path to simens nx
 
 def prepare_files_for_measurement(source_folder, folder_name):
     dest_folder = os.path.join(MEASUREMENT_INPUT_DIR, folder_name)
@@ -20,7 +20,7 @@ def prepare_files_for_measurement(source_folder, folder_name):
         os.makedirs(dest_folder)
     files_to_copy = {
         "top.png": "top.png",
-        "left.png": "side.png" # KEY
+        "left.png": "side.png" 
     }
     files_found = False
 
