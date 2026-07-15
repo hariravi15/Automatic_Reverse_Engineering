@@ -211,7 +211,3 @@ If you use this code, please cite the paper:
   note    = {36th CIRP Design Conference (CIRP Design 2026)}
 }
 ```
-
-## License
-
-Add a license file if you intend for others to reuse or build on this code — the repository doesn't currently include one. The paper itself is CC BY-NC-ND 4.0, but that covers the *article*, not automatically the *code*; pick a license for the software separately (e.g. MIT, Apache-2.0) and add a `LICENSE` file at the repo root.
